@@ -127,3 +127,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+segmenteverygrain/checkpoints/sam_vit_h_4b8939.pth

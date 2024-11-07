@@ -1405,12 +1405,23 @@ def plot_image_w_colorful_grains(image, all_grains, ax, cmap='viridis', plot_ima
     cmap = plt.cm.get_cmap(cmap)
     num_colors = len(all_grains)  # Number of colors to choose
     
+        
     if color_by_size:
-        sizes = [grain.area for grain in all_grains]
-        sizes = np.array(sizes)
-        color_indices = np.argsort(sizes)[::-1][:num_colors]
+        sizes = np.array([grain.area for grain in all_grains])
+        
+        # Normalize sizes to range from 0 to 1
+        norm = (sizes - sizes.min()) / (sizes.max() - sizes.min())
+        
+        # Map normalized sizes to the full range of color indices in the colormap
+        color_indices = (norm * (cmap.N - 1)).astype(int)
     else:  # Generate random indices for colors
         color_indices = np.random.randint(0, cmap.N, num_colors)
+    # if color_by_size:
+    #     sizes = [grain.area for grain in all_grains]
+    #     sizes = np.array(sizes)
+    #     color_indices = np.argsort(sizes)[::-1][:num_colors]
+    # else:  # Generate random indices for colors
+    #     color_indices = np.random.randint(0, cmap.N, num_colors)
     
     # color_indices = np.random.randint(0, cmap.N, num_colors)
     # Get the individual colors

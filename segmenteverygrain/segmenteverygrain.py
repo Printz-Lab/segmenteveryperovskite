@@ -345,6 +345,7 @@ def two_point_prompt(x1, y1, x2, y2, image, predictor, ax=False):
         sy : numpy.ndarray
             The y-coordinates of the contour points
     """
+    # print(type(predictor))
     input_point = np.array([[x1, y1], [x2, y2]])
     input_label = np.array([1, 0])
     masks, scores, logits = predictor.predict(
@@ -1085,7 +1086,7 @@ def onclick(event, ax, coords, image, predictor):
     if event.button == 3: # right mouse button for background
         ax.patches[-1].remove()
         coords.append((x, y))
-        sx, sy = two_point_prompt(coords[-2][0], coords[-2][1], coords[-1][0], coords[-1][1], ax, image, predictor)
+        sx, sy = two_point_prompt(coords[-2][0], coords[-2][1], coords[-1][0], coords[-1][1], image, predictor, ax=ax)
         ax.figure.canvas.draw()
         
 def onpress(event, ax, fig):

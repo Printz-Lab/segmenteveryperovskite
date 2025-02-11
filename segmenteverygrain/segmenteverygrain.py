@@ -28,17 +28,16 @@ from PIL import Image
 import json
 
 import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.layers import Conv2D, Conv2DTranspose
-from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import concatenate
-from tensorflow.keras.preprocessing.image import load_img
-from tensorflow.keras.optimizers import Adam
+from keras import Model
+from keras.layers import Input, BatchNormalization
+from keras.layers import Conv2D, Conv2DTranspose
+from keras.layers import MaxPooling2D
+from keras.layers import concatenate
+from keras.utils import load_img
+from keras.saving import load_model
+from keras.optimizers import Adam
 
 from segment_anything import SamPredictor
-
-__version__ = '0.1.9'
 
 def predict_image_tile(im_tile, model):
     """
@@ -417,9 +416,9 @@ def Unet():
 
     tf.keras.backend.clear_session()
 
-    image = tf.keras.Input((256, 256, 3), name='input')
+    inputs = Input((256, 256, 3), name='input')
     
-    conv1 = Conv2D(16, (3,3), activation='relu', padding = 'same')(image)
+    conv1 = Conv2D(16, (3,3), activation='relu', padding = 'same')(inputs)
     conv1 = Conv2D(16, (3,3), activation='relu', padding = 'same')(conv1)
     conv1 = BatchNormalization()(conv1)
 
@@ -468,7 +467,7 @@ def Unet():
     conv9 = BatchNormalization()(conv9)
 
     conv10 = Conv2D(3, (1,1), activation='softmax')(conv9)
-    model = Model(inputs=[image], outputs=[conv10])
+    model = Model(inputs=[inputs], outputs=[conv10])
 
     return model
 
@@ -897,7 +896,7 @@ def rasterize_grains(all_grains, image):
     shapes_with_labels = zip(all_grains, labels)
     # Define the shape and resolution of the rasterized output
     out_shape = image.shape[:2]  # Output array shape (height, width)
-    bounds = (0, image.shape[0], image.shape[1], 0)  # Left, bottom, right, top of the array (bounding box)
+    bounds = (-0.5, image.shape[0]-0.5, image.shape[1]-0.5, -0.5)  # Left, bottom, right, top of the array (bounding box)
     # Define the transformation from pixel coordinates to spatial coordinates
     transform = rasterio.transform.from_bounds(*bounds, out_shape[1], out_shape[0])
     # Rasterize the polygons into an array of labels
@@ -966,6 +965,8 @@ def predict_large_image(fname, model, sam, min_area, patch_size=2000, overlap=30
         A list of grains represented as polygons.
     image_pred : numpy.ndarray
         The Unet predictions for the entire image.
+    all_coords : numpy.ndarray
+        The coordinates of the SAM prompts.
     """
     step_size = patch_size - overlap  # step size for overlapping patches
     image = np.array(load_img(fname))
@@ -975,7 +976,7 @@ def predict_large_image(fname, model, sam, min_area, patch_size=2000, overlap=30
     total_patches = ((img_height - patch_size + step_size) // step_size + 1) * ((img_width - patch_size + step_size) // step_size + 1)
     # Initialize an array to store the Unet predictions for the entire image
     image_pred = np.zeros((img_height, img_width, 3), dtype=np.float32)
-    
+
     for i in range(0, img_height - patch_size + step_size + 1, step_size):
         for j in range(0, img_width - patch_size + step_size + 1, step_size):
             patch = image[i:min(i + patch_size, img_height), j:min(j + patch_size, img_width)]
@@ -1001,10 +1002,17 @@ def predict_large_image(fname, model, sam, min_area, patch_size=2000, overlap=30
                 for grain in all_grains:
                     All_Grains += [translate(grain, xoff=j, yoff=i)] # translate the grains to the original image coordinates
             patch_num = i//step_size*((img_width - patch_size + step_size)//step_size + 1) + j//step_size + 1
+            if len(coords) > 0:
+                coords[:,0] = coords[:,0] + j
+                coords[:,1] = coords[:,1] + i
+                if patch_num > 1:
+                    all_coords = np.vstack((all_coords, coords))
+                else:
+                    all_coords = coords.copy()
             print(f"processed patch #{patch_num} out of {total_patches} patches")
     new_grains, comps, g = find_connected_components(All_Grains, min_area)
     All_Grains = merge_overlapping_polygons(All_Grains, new_grains, comps, min_area, patch_pred)
-    return All_Grains, image_pred
+    return All_Grains, image_pred, all_coords
 
 def load_and_preprocess(image_path, mask_path, augmentations=False):
     """
@@ -1584,7 +1592,7 @@ def patchify_training_data(input_dir, patch_dir):
     start_no = 0
     for image in tqdm(images):
         # Load the large image
-        large_image = tf.keras.preprocessing.image.load_img(image)
+        large_image = load_img(image)
         # Convert the image to a tensor
         large_image = tf.keras.preprocessing.image.img_to_array(large_image)
         # Reshape the tensor to have a batch size of 1
@@ -1610,7 +1618,7 @@ def patchify_training_data(input_dir, patch_dir):
     start_no = 0
     for image in tqdm(labels):
         # Load the large image
-        large_image = tf.keras.preprocessing.image.load_img(image)
+        large_image = load_img(image)
         # Convert the image to a tensor
         large_image = tf.keras.preprocessing.image.img_to_array(large_image)
         large_image = large_image[:,:,0,np.newaxis] # only keep one layer and add a new axis
@@ -1696,14 +1704,14 @@ def create_train_val_test_data(image_dir, mask_dir, augmentation=True):
 
     return train_dataset, val_dataset, test_dataset
 
-def create_and_train_model(weights_dir, train_dataset, val_dataset, test_dataset, epochs=100):
+def create_and_train_model(train_dataset, val_dataset, test_dataset, model_file=None, epochs=100):
     """
     Create and train a U-Net model.
 
     Parameters
     ----------
-    weights_dir : str
-        Path to the directory containing the model weights.
+    model_file : str
+        Path to the file containing the model weights.
     train_dataset : tf.data.Dataset
         Training dataset.
     val_dataset : tf.data.Dataset
@@ -1722,9 +1730,11 @@ def create_and_train_model(weights_dir, train_dataset, val_dataset, test_dataset
     -----
     The function will plot the training and validation loss and accuracy over epochs.
     """
-    model = Unet()
-    model.compile(optimizer=Adam(), loss=weighted_crossentropy, metrics=["accuracy"])
-    model.load_weights(weights_dir)
+    if model_file:
+        model = load_model(model_file, custom_objects={'weighted_crossentropy': weighted_crossentropy})
+    else:
+        model = Unet()
+        model.compile(optimizer=Adam(), loss=weighted_crossentropy, metrics=["accuracy"])
     history = model.fit(train_dataset, epochs=epochs, validation_data=val_dataset)
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12,5))
     axes[0].plot(history.history['loss'])

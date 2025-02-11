@@ -345,7 +345,7 @@ def two_point_prompt(x1, y1, x2, y2, image, predictor, ax=False):
         sy : numpy.ndarray
             The y-coordinates of the contour points
     """
-    # print(type(predictor))
+    
     input_point = np.array([[x1, y1], [x2, y2]])
     input_label = np.array([1, 0])
     masks, scores, logits = predictor.predict(

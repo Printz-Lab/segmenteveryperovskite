@@ -134,3 +134,7 @@ segmenteverygrain/checkpoints/sam_vit_h_4b8939.pth
 *.tif
 perovskite_segmentation/misc_data/perovskite_sems/modified/MAPbI3_Cycle_SEM_Grains/AVACl 25KX/231218_AAS_AVACl_MAPbI3_5cyc_q014.tif
 *.tif
+
+#sean local
+data/
+seg_tf_workspace/

@@ -13,8 +13,8 @@ pillow
 rasterio
 opencv-python
 rtree
-tensorflow
+# tensorflow
 torch
 torchvision
 segment-anything
-segmenteverygrain
+# segmenteverygrain

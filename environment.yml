@@ -1,6 +1,7 @@
-name: segmenteverygrain
+name: segmenteverygrain2
 
 channels:
+  - nvidia
   - conda-forge
   - defaults
 
@@ -24,7 +25,8 @@ dependencies:
     - opencv-python
     - rtree
     - tensorflow
-    - torch
-    - torchvision
     - segment-anything
     - segmenteverygrain
+  # - pytorch::pytorch  # Ensure PyTorch is installed from PyTorch channel
+  # - pytorch::torchvision
+  # - pytorch::torchaudio
